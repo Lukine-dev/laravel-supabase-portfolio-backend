@@ -20,7 +20,7 @@ class AwardController extends Controller
     public function index($serviceId)
     {
         $service = Service::findOrFail($serviceId);
-        $awards = $service->awards()->get();
+        $awards  = $service->awards()->get();
 
         return view('admin.awards.index', compact('service', 'awards'));
     }
@@ -28,6 +28,7 @@ class AwardController extends Controller
     public function create($serviceId)
     {
         $service = Service::findOrFail($serviceId);
+
         return view('admin.awards.create', compact('service'));
     }
 
@@ -47,16 +48,15 @@ class AwardController extends Controller
         $data = $request->only(['title', 'issuer', 'date']);
 
         if ($request->hasFile('certificate')) {
-            $file = $request->file('certificate');
-            $path = 'awards/' . uniqid() . '_' . $file->getClientOriginalName();
+            $file     = $request->file('certificate');
+            $path     = 'awards/' . uniqid() . '_' . $file->getClientOriginalName();
+            $uploaded = $this->supabase->upload($path, file_get_contents($file->getRealPath()));
 
-            $url = $this->supabase->upload($path, file_get_contents($file->getRealPath()));
-
-            if (!$url) {
+            if (!$uploaded) {
                 return back()->with('error', 'Certificate upload failed.');
             }
 
-            $data['file_path'] = $url;
+            $data['file_path'] = $path;
         }
 
         $service = Service::findOrFail($serviceId);
@@ -69,6 +69,7 @@ class AwardController extends Controller
     public function edit($serviceId, Award $award)
     {
         $service = Service::findOrFail($serviceId);
+
         return view('admin.awards.edit', compact('service', 'award'));
     }
 
@@ -88,19 +89,20 @@ class AwardController extends Controller
         $data = $request->only(['title', 'issuer', 'date']);
 
         if ($request->hasFile('certificate')) {
+            // delete old file if it exists
             if ($award->file_path) {
                 $this->supabase->delete($award->file_path);
             }
 
-            $file = $request->file('certificate');
-            $path = 'awards/' . uniqid() . '_' . $file->getClientOriginalName();
-            $url  = $this->supabase->upload($path, file_get_contents($file->getRealPath()));
+            $file     = $request->file('certificate');
+            $path     = 'awards/' . uniqid() . '_' . $file->getClientOriginalName();
+            $uploaded = $this->supabase->upload($path, file_get_contents($file->getRealPath()));
 
-            if (!$url) {
+            if (!$uploaded) {
                 return back()->with('error', 'Certificate upload failed.');
             }
 
-            $data['file_path'] = $url;
+            $data['file_path'] = $path;
         }
 
         $award->update($data);

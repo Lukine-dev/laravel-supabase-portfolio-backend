@@ -19,7 +19,7 @@ class CertificateController extends Controller
 
     public function index($serviceId)
     {
-        $service = Service::findOrFail($serviceId);
+        $service      = Service::findOrFail($serviceId);
         $certificates = $service->certificates()->get();
 
         return view('admin.certificates.index', compact('service', 'certificates'));
@@ -28,6 +28,7 @@ class CertificateController extends Controller
     public function create($serviceId)
     {
         $service = Service::findOrFail($serviceId);
+
         return view('admin.certificates.create', compact('service'));
     }
 
@@ -47,16 +48,15 @@ class CertificateController extends Controller
         $data = $request->only(['title', 'issuer', 'date']);
 
         if ($request->hasFile('certificate')) {
-            $file = $request->file('certificate');
-            $path = 'certificates/' . uniqid() . '_' . $file->getClientOriginalName();
+            $file     = $request->file('certificate');
+            $path     = 'certificates/' . uniqid() . '_' . $file->getClientOriginalName();
+            $uploaded = $this->supabase->upload($path, file_get_contents($file->getRealPath()));
 
-            $url = $this->supabase->upload($path, file_get_contents($file->getRealPath()));
-
-            if (!$url) {
+            if (!$uploaded) {
                 return back()->with('error', 'Certificate upload failed.');
             }
 
-            $data['file_path'] = $url;
+            $data['file_path'] = $path;
         }
 
         $service = Service::findOrFail($serviceId);
@@ -69,6 +69,7 @@ class CertificateController extends Controller
     public function edit($serviceId, Certificate $certificate)
     {
         $service = Service::findOrFail($serviceId);
+
         return view('admin.certificates.edit', compact('service', 'certificate'));
     }
 
@@ -88,19 +89,20 @@ class CertificateController extends Controller
         $data = $request->only(['title', 'issuer', 'date']);
 
         if ($request->hasFile('certificate')) {
+            // delete old file
             if ($certificate->file_path) {
                 $this->supabase->delete($certificate->file_path);
             }
 
-            $file = $request->file('certificate');
-            $path = 'certificates/' . uniqid() . '_' . $file->getClientOriginalName();
-            $url  = $this->supabase->upload($path, file_get_contents($file->getRealPath()));
+            $file     = $request->file('certificate');
+            $path     = 'certificates/' . uniqid() . '_' . $file->getClientOriginalName();
+            $uploaded = $this->supabase->upload($path, file_get_contents($file->getRealPath()));
 
-            if (!$url) {
+            if (!$uploaded) {
                 return back()->with('error', 'Certificate upload failed.');
             }
 
-            $data['file_path'] = $url;
+            $data['file_path'] = $path;
         }
 
         $certificate->update($data);

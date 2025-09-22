@@ -5,10 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Project;
 use App\Models\Service;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use App\Services\SupabaseStorageService;
 use Intervention\Image\ImageManager;
-use Intervention\Image\Drivers\Gd\Driver; // or use Imagick driver if supported
+use Intervention\Image\Drivers\Gd\Driver; // or Imagick if available
 
 class ProjectController extends Controller
 {
@@ -44,20 +43,20 @@ class ProjectController extends Controller
     public function store(Request $request, $serviceId)
     {
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'title'             => 'required|string|max:255',
             'short_description' => 'required|string|max:500',
-            'full_description' => 'required|string',
-            'start_date' => 'required|date',
-            'completion_date' => 'nullable|date|after:start_date',
-            'position' => 'required|string|max:255',
-            'tech_stack' => 'required|string',
-            'github_url' => 'nullable|url',
-            'project_url' => 'nullable|url',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'full_description'  => 'required|string',
+            'start_date'        => 'required|date',
+            'completion_date'   => 'nullable|date|after:start_date',
+            'position'          => 'required|string|max:255',
+            'tech_stack'        => 'required|string',
+            'github_url'        => 'nullable|url',
+            'project_url'       => 'nullable|url',
+            'image'             => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ]);
 
         if ($request->hasFile('image')) {
-            $validated['image_path'] = $this->processAndUploadImage($request->file('image'));
+            $validated['image_path'] = $this->handleImageUpload($request->file('image'), 'projects');
         }
 
         // Convert tech stack to array
@@ -75,16 +74,16 @@ class ProjectController extends Controller
         $project = Project::findOrFail($projectId);
 
         $validated = $request->validate([
-            'title' => 'required|string|max:255',
+            'title'             => 'required|string|max:255',
             'short_description' => 'required|string|max:500',
-            'full_description' => 'required|string',
-            'start_date' => 'required|date',
-            'completion_date' => 'nullable|date|after:start_date',
-            'position' => 'required|string|max:255',
-            'tech_stack' => 'required|string',
-            'github_url' => 'nullable|url',
-            'project_url' => 'nullable|url',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'full_description'  => 'required|string',
+            'start_date'        => 'required|date',
+            'completion_date'   => 'nullable|date|after:start_date',
+            'position'          => 'required|string|max:255',
+            'tech_stack'        => 'required|string',
+            'github_url'        => 'nullable|url',
+            'project_url'       => 'nullable|url',
+            'image'             => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ]);
 
         if ($request->hasFile('image')) {
@@ -97,7 +96,7 @@ class ProjectController extends Controller
                 }
             }
 
-            $validated['image_path'] = $this->processAndUploadImage($request->file('image'));
+            $validated['image_path'] = $this->handleImageUpload($request->file('image'), 'projects');
         }
 
         // Convert tech stack to array
@@ -128,31 +127,47 @@ class ProjectController extends Controller
     }
 
     /**
-     * Handle image resize, optimize, and upload to Supabase
+     * Flexible image upload handler
+     * - Accepts single file or array of files
+     * - Resizes, optimizes, uploads to Supabase
+     * - Returns string (for single) or array (for multiple)
      */
-    private function processAndUploadImage($image)
+    private function handleImageUpload($files, $folder)
     {
-        $imageName = 'projects/' . time() . '_' . preg_replace('/[^a-zA-Z0-9\.]/', '_', $image->getClientOriginalName());
+        $manager = new ImageManager(new Driver());
 
-        // ✅ Intervention Image v3
-        $manager = new ImageManager(new Driver()); // swap with Imagick driver if available
+        $processFile = function ($file) use ($manager, $folder) {
+            $imageName = $folder . '/' . time() . '_' . preg_replace('/[^a-zA-Z0-9\.]/', '_', $file->getClientOriginalName());
 
-        $img = $manager->read($image->getRealPath())
-                       ->scale(width: 800); // keeps aspect ratio
+            $img = $manager->read($file->getRealPath())
+                           ->scale(width: 800);
 
-        $tempPath = tempnam(sys_get_temp_dir(), 'supabase_');
-        $img->toJpeg(80)->save($tempPath);
+            $tempPath = tempnam(sys_get_temp_dir(), 'supabase_');
+            $img->toJpeg(80)->save($tempPath);
 
-        $this->supabaseStorage->uploadImage($imageName, new \Illuminate\Http\UploadedFile(
-            $tempPath,
-            $imageName,
-            $image->getClientMimeType(),
-            null,
-            true
-        ));
+            $this->supabaseStorage->uploadImage($imageName, new \Illuminate\Http\UploadedFile(
+                $tempPath,
+                $imageName,
+                $file->getClientMimeType(),
+                null,
+                true
+            ));
 
-        unlink($tempPath);
+            unlink($tempPath);
 
-        return $imageName;
+            return $imageName;
+        };
+
+        // Handle multiple files
+        if (is_array($files)) {
+            $paths = [];
+            foreach ($files as $file) {
+                $paths[] = $processFile($file);
+            }
+            return $paths;
+        }
+
+        // Handle single file
+        return $processFile($files);
     }
 }
